@@ -2,11 +2,14 @@
 
 namespace tests;
 
+use Codeception\Util\Stub;
 use degordian\geofencing\enums\GeoIpFilterMode;
 use degordian\geofencing\filters\GeoIpAccessControl;
+use lysenkobv\GeoIP\GeoIP;
 use Yii;
 use yii\base\InvalidConfigException;
 use yii\web\ForbiddenHttpException;
+use yii\web\Request;
 
 class GeoIpAccessControlTest extends \Codeception\Test\Unit
 {
@@ -15,34 +18,127 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
      */
     protected $tester;
 
+    const HR_IP = '161.53.72.120'; //Faculty of Electrical Engineering and Computing, University of Zagreb
+
     protected function _before()
     {
     }
 
     protected function _after()
     {
+        //reset the DI container
+        Yii::$app->set('request', null);
+        Yii::$container->set(GeoIP::class, null);
     }
 
-    public function testFilter_ModeAllow_WhenLocationIsAllowed()
+    private function stubGetIp()
+    {
+        $requestStub = Stub::make(Request::class, [
+            'getUserIP' => Stub::once(function () {
+                return self::HR_IP;
+            }),
+        ]);
+        Yii::$app->set('request', $requestStub);
+    }
+
+    private function stubGetIsoCode()
+    {
+        $geoIpStub = Stub::make(GeoIP::class, [
+            'ip' => Stub::once(function ($ip) {
+                $result = new \stdClass();
+                if ($ip === self::HR_IP) {
+                    $result->isoCode = 'HR';
+                } else {
+                    $result->isoCode = 'SI';
+                }
+
+                return $result;
+            }),
+        ]);
+        Yii::$container->set(GeoIP::class, $geoIpStub);
+    }
+
+    public function testFilter_WhenUsingDefaultFunctoins()
+    {
+        $this->stubGetIp();
+        $this->stubGetIsoCode();
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['HR'],
+            'filterMode' => GeoIpFilterMode::ALLOW,
+        ]);
+
+        $this->assertTrue($filter->beforeAction(null));
+    }
+
+    public function testFilter_WhenUsingDefaultGetIsoCode()
+    {
+        $this->stubGetIsoCode();
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['HR'],
+            'filterMode' => GeoIpFilterMode::ALLOW,
+        ]);
+
+        $this->assertTrue($filter->beforeAction(null));
+    }
+
+    public function testFilter_WhenUsingCustomGetIp()
+    {
+        $requestStub = Stub::make(Request::class, [
+            'getUserIP' => Stub::never(function () {
+                return self::HR_IP;
+            }),
+        ]);
+        Yii::$app->set('request', $requestStub);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['SI', 'HR'],
+            'filterMode' => GeoIpFilterMode::ALLOW,
+            'getIp' => function () {
+                return self::HR_IP;
+            },
+        ]);
+
+        $this->stubGetIsoCode();
+
+        $this->assertTrue($filter->beforeAction(null));
+    }
+
+    public function testFilter_ModeAllow_LocationIsAllowed()
     {
         $filter = $this->createFilter([
             'isoCodes' => ['SI', 'HR'],
             'filterMode' => GeoIpFilterMode::ALLOW,
             'getIp' => function () {
-                return '161.53.72.120'; //HR ip
+                return self::HR_IP;
+            },
+            'getIsoCode' => function ($ip) {
+                if ($ip === self::HR_IP) {
+                    return 'HR';
+                }
+
+                return 'NA';
             },
         ]);
 
         $this->assertTrue($filter->beforeAction(null));
     }
 
-    public function testFilter_ModeDeny_WhenLocationIsNotAllowed()
+    public function testFilter_ModeDeny_LocationIsNotAllowed()
     {
         $filter = $this->createFilter([
             'isoCodes' => ['SI', 'HR'],
             'filterMode' => GeoIpFilterMode::DENY,
             'getIp' => function () {
-                return '161.53.72.120'; //HR ip
+                return self::HR_IP;
+            },
+            'getIsoCode' => function ($ip) {
+                if ($ip === self::HR_IP) {
+                    return 'HR';
+                }
+
+                return 'NA';
             },
         ]);
 
@@ -56,7 +152,7 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
             'isoCodes' => 'HR',
             'filterMode' => GeoIpFilterMode::ALLOW,
             'getIp' => function () {
-                return '161.53.72.120'; //HR ip
+                return self::HR_IP;
             },
         ]);
 
@@ -150,11 +246,12 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
 
     public function testFilter_InvalidIsoCodes()
     {
+        $this->expectException(InvalidConfigException::class);
+
         $filter = $this->createFilter([
             'isoCodes' => 12345,
         ]);
 
-        $this->expectException(ForbiddenHttpException::class);
         $filter->beforeAction(null);
     }
 
