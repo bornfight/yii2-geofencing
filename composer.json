@@ -1,0 +1,27 @@
+{
+    "name": "degordian/yii2-geofencing",
+    "description": "Yii2 ActionFilter for allowing or denying access based on the visitors geo location",
+    "type": "yii2-extension",
+    "keywords": [
+        "yii2",
+        "extension",
+        "degordian",
+        "geofencing"
+    ],
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Marko Kruljac",
+            "email": "marko.kruljac@degordian.com"
+        }
+    ],
+    "require": {
+        "yiisoft/yii2": "*",
+        "lysenkobv/yii2-geoip": "~1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "degordian\\geofencing\\": "src"
+        }
+    }
+}

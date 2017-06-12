@@ -1,0 +1,18 @@
+# Codeception Test Suite Configuration
+#
+# Suite for unit or integration tests.
+
+actor: UnitTester
+coverage:
+    enabled: true
+    whitelist:
+        include:
+            - src/*
+modules:
+    enabled:
+        - Asserts
+        - \tests\Helper\Unit
+        - Yii2
+    config:
+        Yii2:
+            configFile: 'tests/config/unit.php'
