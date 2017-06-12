@@ -17,9 +17,6 @@ return [
         ],
     ],
     'components' => [
-        'db' => [
-            'class' => 'yii\db\Connection',
-        ],
         'mailer' => [
             'useFileTransport' => true,
         ],

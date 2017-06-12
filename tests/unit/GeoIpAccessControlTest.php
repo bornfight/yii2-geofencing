@@ -125,7 +125,7 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
     {
         $filter = $this->createFilter([
             'isoCodes' => 'HR',
-            'filterMode' => GeoIpFilterMode::ALLOW,
+            'filterMode' => GeoIpFilterMode::DENY,
             'getIsoCode' => function ($ip) {
                 return 'SI';
             },
@@ -138,7 +138,7 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
     {
         $filter = $this->createFilter([
             'isoCodes' => 'SI',
-            'filterMode' => GeoIpFilterMode::ALLOW,
+            'filterMode' => GeoIpFilterMode::DENY,
             'getIsoCode' => function ($ip) {
                 return 'SI';
             },
@@ -146,6 +146,28 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
 
         $this->expectException(ForbiddenHttpException::class);
         $filter->beforeAction(null);
+    }
+
+    public function testFilter_InvalidIsoCodes()
+    {
+        $filter = $this->createFilter([
+            'isoCodes' => 12345,
+        ]);
+
+        $this->expectException(ForbiddenHttpException::class);
+        $filter->beforeAction(null);
+    }
+
+    public function testFilter_NoFilterModeSet_DefaultFilterModeShouldBeAllow()
+    {
+        $filter = $this->createFilter([
+            'isoCodes' => 'SI',
+            'getIsoCode' => function ($ip) {
+                return 'SI';
+            },
+        ]);
+
+        $this->assertSame(GeoIpFilterMode::ALLOW, $filter->filterMode);
     }
 
     private function createFilter(array $config = []): GeoIpAccessControl
