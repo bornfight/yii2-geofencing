@@ -19,10 +19,7 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
     protected $tester;
 
     const HR_IP = '161.53.72.120'; //Faculty of Electrical Engineering and Computing, University of Zagreb
-
-    protected function _before()
-    {
-    }
+    const SI_IP = '46.122.0.0';
 
     protected function _after()
     {
@@ -31,20 +28,20 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
         Yii::$container->set(GeoIP::class, null);
     }
 
-    private function stubGetIp()
+    private function stubGetIp(int $count)
     {
         $requestStub = Stub::make(Request::class, [
-            'getUserIP' => Stub::once(function () {
+            'getUserIP' => Stub::exactly($count, function () {
                 return self::HR_IP;
             }),
         ]);
         Yii::$app->set('request', $requestStub);
     }
 
-    private function stubGetIsoCode()
+    private function stubGetIsoCode(int $count)
     {
         $geoIpStub = Stub::make(GeoIP::class, [
-            'ip' => Stub::once(function ($ip) {
+            'ip' => Stub::exactly($count, function ($ip) {
                 $result = new \stdClass();
                 if ($ip === self::HR_IP) {
                     $result->isoCode = 'HR';
@@ -58,119 +55,307 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
         Yii::$container->set(GeoIP::class, $geoIpStub);
     }
 
-    public function testFilter_WhenUsingDefaultFunctoins()
+    private function expectAllow(GeoIpAccessControl $filter)
     {
-        $this->stubGetIp();
-        $this->stubGetIsoCode();
+        $this->assertTrue($filter->beforeAction(null));
+    }
+
+    private function expectDeny(GeoIpAccessControl $filter)
+    {
+        $this->expectException(ForbiddenHttpException::class);
+        $filter->beforeAction(null);
+    }
+
+    #region NPath testing
+
+    public function testFilter_DefaultGetIp_DefaultGetIsoCode_FilterAllow_ExpectsAllowed()
+    {
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(1);
 
         $filter = $this->createFilter([
             'isoCodes' => ['HR'],
             'filterMode' => GeoIpFilterMode::ALLOW,
         ]);
 
-        $this->assertTrue($filter->beforeAction(null));
+        $this->expectAllow($filter);
     }
 
-    public function testFilter_WhenUsingDefaultGetIsoCode()
+    public function testFilter_DefaultGetIp_DefaultGetIsoCode_FilterAllow_ExpectsDenied()
     {
-        $this->stubGetIsoCode();
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(1);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['SI'],
+            'filterMode' => GeoIpFilterMode::ALLOW,
+        ]);
+
+        $this->expectDeny($filter);
+    }
+
+    public function testFilter_CustomGetIp_DefaultGetIsoCode_FilterAllow_ExpectsAllowed()
+    {
+        $this->stubGetIp(0);
+        $this->stubGetIsoCode(1);
 
         $filter = $this->createFilter([
             'isoCodes' => ['HR'],
             'filterMode' => GeoIpFilterMode::ALLOW,
+            'getIp' => function () {
+                return self::HR_IP;
+            },
         ]);
 
-        $this->assertTrue($filter->beforeAction(null));
+        $this->expectAllow($filter);
     }
 
-    public function testFilter_WhenUsingCustomGetIp()
+    public function testFilter_CustomGetIp_DefaultGetIsoCode_FilterAllow_ExpectsDenied()
     {
-        $requestStub = Stub::make(Request::class, [
-            'getUserIP' => Stub::never(function () {
-                return self::HR_IP;
-            }),
-        ]);
-        Yii::$app->set('request', $requestStub);
+        $this->stubGetIp(0);
+        $this->stubGetIsoCode(1);
 
         $filter = $this->createFilter([
-            'isoCodes' => ['SI', 'HR'],
+            'isoCodes' => ['SI'],
             'filterMode' => GeoIpFilterMode::ALLOW,
             'getIp' => function () {
                 return self::HR_IP;
             },
         ]);
 
-        $this->stubGetIsoCode();
-
-        $this->assertTrue($filter->beforeAction(null));
+        $this->expectDeny($filter);
     }
 
-    public function testFilter_ModeAllow_LocationIsAllowed()
+
+    public function testFilter_DefaultGetIp_CustomGetIsoCode_FilterAllow_ExpectsAllowed()
     {
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(0);
+
         $filter = $this->createFilter([
-            'isoCodes' => ['SI', 'HR'],
+            'isoCodes' => ['HR'],
+            'filterMode' => GeoIpFilterMode::ALLOW,
+            'getIsoCode' => function ($ip) {
+                return 'HR';
+            },
+        ]);
+
+        $this->expectAllow($filter);
+    }
+
+    public function testFilter_DefaultGetIp_CustomGetIsoCode_FilterAllow_ExpectsDenied()
+    {
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(0);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['SI'],
+            'filterMode' => GeoIpFilterMode::ALLOW,
+            'getIsoCode' => function ($ip) {
+                return 'HR';
+            },
+        ]);
+
+        $this->expectDeny($filter);
+    }
+
+    public function testFilter_CustomGetIp_CustomGetIsoCode_FilterAllow_ExpectsAllowed()
+    {
+        $this->stubGetIp(0);
+        $this->stubGetIsoCode(0);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['US'],
             'filterMode' => GeoIpFilterMode::ALLOW,
             'getIp' => function () {
-                return self::HR_IP;
+                return '127.0.0.1';
             },
             'getIsoCode' => function ($ip) {
-                if ($ip === self::HR_IP) {
-                    return 'HR';
+                if ($ip === '127.0.0.1') {
+                    return 'US';
                 }
 
-                return 'NA';
+                return 'RU';
             },
         ]);
 
-        $this->assertTrue($filter->beforeAction(null));
+        $this->expectAllow($filter);
     }
 
-    public function testFilter_ModeDeny_LocationIsNotAllowed()
+    public function testFilter_CustomGetIp_CustomGetIsoCode_FilterAllow_ExpectsDenied()
     {
+        $this->stubGetIp(0);
+        $this->stubGetIsoCode(0);
+
         $filter = $this->createFilter([
-            'isoCodes' => ['SI', 'HR'],
+            'isoCodes' => ['RU'],
+            'filterMode' => GeoIpFilterMode::ALLOW,
+            'getIp' => function () {
+                return '127.0.0.1';
+            },
+            'getIsoCode' => function ($ip) {
+                if ($ip === '127.0.0.1') {
+                    return 'US';
+                }
+
+                return 'RU';
+            },
+        ]);
+
+        $this->expectDeny($filter);
+    }
+
+
+    public function testFilter_DefaultGetIp_DefaultGetIsoCode_FilterDeny_ExpectsAllowed()
+    {
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(1);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['US'],
+            'filterMode' => GeoIpFilterMode::DENY,
+        ]);
+
+        $this->expectAllow($filter);
+    }
+
+    public function testFilter_DefaultGetIp_DefaultGetIsoCode_FilterDeny_ExpectsDenied()
+    {
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(1);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['HR'],
+            'filterMode' => GeoIpFilterMode::DENY,
+        ]);
+
+        $this->expectDeny($filter);
+    }
+
+    public function testFilter_CustomGetIp_DefaultGetIsoCode_FilterDeny_ExpectsAllowed()
+    {
+        $this->stubGetIp(0);
+        $this->stubGetIsoCode(1);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['US'],
             'filterMode' => GeoIpFilterMode::DENY,
             'getIp' => function () {
                 return self::HR_IP;
             },
-            'getIsoCode' => function ($ip) {
-                if ($ip === self::HR_IP) {
-                    return 'HR';
-                }
-
-                return 'NA';
-            },
         ]);
 
-        $this->expectException(ForbiddenHttpException::class);
-        $filter->beforeAction(null);
+        $this->expectAllow($filter);
     }
 
-    public function testFilter_WhenIsoCodesIsString_ExpectsAllow()
+    public function testFilter_CustomGetIp_DefaultGetIsoCode_FilterDeny_ExpectsDenied()
     {
+        $this->stubGetIp(0);
+        $this->stubGetIsoCode(1);
+
         $filter = $this->createFilter([
-            'isoCodes' => 'HR',
-            'filterMode' => GeoIpFilterMode::ALLOW,
+            'isoCodes' => ['HR'],
+            'filterMode' => GeoIpFilterMode::DENY,
             'getIp' => function () {
                 return self::HR_IP;
             },
         ]);
 
-        $this->assertTrue($filter->beforeAction(null));
+        $this->expectDeny($filter);
     }
 
-    public function testFilter_WhenIsoCodesIsString_ExpectsDeny()
+
+    public function testFilter_DefaultGetIp_CustomGetIsoCode_FilterDeny_ExpectsAllowed()
     {
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(0);
+
         $filter = $this->createFilter([
-            'isoCodes' => 'HR',
+            'isoCodes' => ['RU'],
             'filterMode' => GeoIpFilterMode::DENY,
-            'getIp' => function () {
-                return '161.53.72.120'; //HR ip
+            'getIsoCode' => function ($ip) {
+                return 'HR';
             },
         ]);
 
-        $this->expectException(ForbiddenHttpException::class);
-        $filter->beforeAction(null);
+        $this->expectAllow($filter);
+    }
+
+    public function testFilter_DefaultGetIp_CustomGetIsoCode_FilterDeny_ExpectsDenied()
+    {
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(0);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['HR'],
+            'filterMode' => GeoIpFilterMode::DENY,
+            'getIsoCode' => function ($ip) {
+                return 'HR';
+            },
+        ]);
+
+        $this->expectDeny($filter);
+    }
+
+    public function testFilter_CustomGetIp_CustomGetIsoCode_FilterDeny_ExpectsAllowed()
+    {
+        $this->stubGetIp(0);
+        $this->stubGetIsoCode(0);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['RU'],
+            'filterMode' => GeoIpFilterMode::DENY,
+            'getIp' => function () {
+                return '127.0.0.1';
+            },
+            'getIsoCode' => function ($ip) {
+                if ($ip === '127.0.0.1') {
+                    return 'US';
+                }
+
+                return 'RU';
+            },
+        ]);
+
+        $this->expectAllow($filter);
+    }
+
+    public function testFilter_CustomGetIp_CustomGetIsoCode_FilterDeny_ExpectsDenied()
+    {
+        $this->stubGetIp(0);
+        $this->stubGetIsoCode(0);
+
+        $filter = $this->createFilter([
+            'isoCodes' => ['US'],
+            'filterMode' => GeoIpFilterMode::DENY,
+            'getIp' => function () {
+                return '127.0.0.1';
+            },
+            'getIsoCode' => function ($ip) {
+                if ($ip === '127.0.0.1') {
+                    return 'US';
+                }
+
+                return 'RU';
+            },
+        ]);
+
+        $this->expectDeny($filter);
+    }
+
+    #endregion
+
+    public function testFilter_WhenIsoCodesIsString()
+    {
+        $this->stubGetIp(1);
+        $this->stubGetIsoCode(1);
+
+        $filter = $this->createFilter([
+            'isoCodes' => 'HR',
+            'filterMode' => GeoIpFilterMode::ALLOW,
+        ]);
+
+        $this->assertSame(['HR'], $filter->isoCodes);
     }
 
     public function testFilter_WhenNoIsoCodesAreGiven_ExpectsException()
@@ -190,61 +375,7 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
         ]);
     }
 
-    public function testFilter_WhenUsingCustomGetIsoCodeFunction_ModeAllow_ExpectsAllow()
-    {
-        $filter = $this->createFilter([
-            'isoCodes' => 'HR',
-            'filterMode' => GeoIpFilterMode::ALLOW,
-            'getIsoCode' => function ($ip) {
-                return 'HR';
-            },
-        ]);
-
-        $this->assertTrue($filter->beforeAction(null));
-    }
-
-    public function testFilter_WhenUsingCustomGetIsoCodeFunction_ModeAllow_ExpectsDeny()
-    {
-        $filter = $this->createFilter([
-            'isoCodes' => 'HR',
-            'filterMode' => GeoIpFilterMode::ALLOW,
-            'getIsoCode' => function ($ip) {
-                return 'SI';
-            },
-        ]);
-
-        $this->expectException(ForbiddenHttpException::class);
-        $filter->beforeAction(null);
-    }
-
-    public function testFilter_WhenUsingCustomGetIsoCodeFunction_ModeDeny_ExpectsAllow()
-    {
-        $filter = $this->createFilter([
-            'isoCodes' => 'HR',
-            'filterMode' => GeoIpFilterMode::DENY,
-            'getIsoCode' => function ($ip) {
-                return 'SI';
-            },
-        ]);
-
-        $this->assertTrue($filter->beforeAction(null));
-    }
-
-    public function testFilter_WhenUsingCustomGetIsoCodeFunction_ModeDeny_ExpectsDeny()
-    {
-        $filter = $this->createFilter([
-            'isoCodes' => 'SI',
-            'filterMode' => GeoIpFilterMode::DENY,
-            'getIsoCode' => function ($ip) {
-                return 'SI';
-            },
-        ]);
-
-        $this->expectException(ForbiddenHttpException::class);
-        $filter->beforeAction(null);
-    }
-
-    public function testFilter_InvalidIsoCodes()
+    public function testFilter_InvalidIsoCodesType()
     {
         $this->expectException(InvalidConfigException::class);
 
@@ -259,9 +390,6 @@ class GeoIpAccessControlTest extends \Codeception\Test\Unit
     {
         $filter = $this->createFilter([
             'isoCodes' => 'SI',
-            'getIsoCode' => function ($ip) {
-                return 'SI';
-            },
         ]);
 
         $this->assertSame(GeoIpFilterMode::ALLOW, $filter->filterMode);
