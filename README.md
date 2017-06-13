@@ -10,13 +10,13 @@ The preferred way to install this extension is through [composer](http://getcomp
 Either run
 
 ```
-composer require --prefer-dist degordian/yii2-geofencing "dev-master"
+composer require --prefer-dist degordian/yii2-geofencing "~1.0"
 ```
 
 or add
 
 ```
-"degordian/yii2-geofencing": "dev-master"
+"degordian/yii2-geofencing": "~1.0"
 ```
 
 to the require section of your `composer.json` file.
