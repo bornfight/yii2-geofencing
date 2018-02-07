@@ -46,4 +46,4 @@ Once the extension is installed, add it to your controller
     ]
   }
 ```
-Since this extends ActiveFilter, you can use 'only' and 'except' to fine tune the geofencing criteria
+Since this extends ActionFilter, you can use 'only' and 'except' to fine tune the geofencing criteria
