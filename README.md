@@ -32,8 +32,8 @@ Once the extension is installed, add it to your controller
     return [
       'class' => GeoIpAccessControl::class,
       'isoCodes' => ['HR', 'SI', 'RS'], //ISO 3166-1 alpha-2 two letter country code
-      'mode' => GeoIpFilterMode::ALLOW //allows only if you are listed in isoCodes,
-      #'mode' => GeoIpFilterMode::DENY //allows only if you are not listed in isoCodes
+      'filterMode' => GeoIpFilterMode::ALLOW, //allows only if you are listed in isoCodes,
+      #'filterMode' => GeoIpFilterMode::DENY //allows only if you are not listed in isoCodes
       'getIp' => function() {
         //you can provide a custom function used to get the clients IP
         //defaults to Yii::$app->request->getUserIP()
