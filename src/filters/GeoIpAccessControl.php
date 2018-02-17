@@ -27,7 +27,7 @@ class GeoIpAccessControl extends ActionFilter
      * @var callable Provide a custom function to get the clients IP address (for example, from a database).
      * The signature of the callable should be:
      * ```php
-     * function() { }
+     * function(): string { }
      * ``
      * The default is Yii::$app->request->getUserIP()
      */
@@ -36,7 +36,7 @@ class GeoIpAccessControl extends ActionFilter
     /** @var callable Provide a custom function to get the iso code from a given IP address.
      * The signature of the callable should be:
      * ```php
-     * function($ip) {
+     * function(string $ip): string {
      *   //$ip - The ip address returned by $getIp
      * }
      * ```
